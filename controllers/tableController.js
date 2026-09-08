@@ -1,11 +1,25 @@
+/**
+ * @file tableController.js
+ * @description Controller handling table initialization, retrieval, manual table creation,
+ * status transitions ('available' <-> 'closed'), and QR code validation / customer token generation.
+ */
+
 const Table = require('../models/Table');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 
+// Validate presence of JWT secret for session generation
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('FATAL: JWT_SECRET environment variable is not set.');
 
-// Seed 8 predefined tables if the collection is empty
+/**
+ * Seeds 8 default dining tables (numbered 1 through 8) with generated random hex QR tokens
+ * if the `Tables` collection is currently empty.
+ * 
+ * @async
+ * @function seedTables
+ * @returns {Promise<void>}
+ */
 exports.seedTables = async () => {
   try {
     const count = await Table.countDocuments();
@@ -23,7 +37,15 @@ exports.seedTables = async () => {
   }
 };
 
-// Get all tables sorted by number
+/**
+ * Fetches all dining tables sorted in ascending order by table number.
+ * 
+ * @async
+ * @function getTables
+ * @param {import('express').Request} req - Express request object.
+ * @param {import('express').Response} res - Express response containing sorted array of tables.
+ * @returns {Promise<void>}
+ */
 exports.getTables = async (req, res) => {
   try {
     const tables = await Table.find().sort({ number: 1 });
@@ -34,10 +56,18 @@ exports.getTables = async (req, res) => {
   }
 };
 
-// Add a new table
+/**
+ * Adds a new dining table to the system with an auto-incremented table number and a unique QR token.
+ * 
+ * @async
+ * @function addTable
+ * @param {import('express').Request} req - Express request object.
+ * @param {import('express').Response} res - Express response returning newly created table object.
+ * @returns {Promise<void>}
+ */
 exports.addTable = async (req, res) => {
   try {
-    // Find the highest table number currently in the DB
+    // Find the highest table number currently registered in DB
     const lastTable = await Table.findOne().sort({ number: -1 });
     const nextNumber = lastTable ? lastTable.number + 1 : 1;
 
@@ -55,18 +85,27 @@ exports.addTable = async (req, res) => {
   }
 };
 
-// Toggle a table's status (e.g. available <-> closed)
+/**
+ * Toggles a table's operational status (e.g. 'available' <-> 'closed').
+ * Prevents closing tables that currently have active customers seated.
+ * 
+ * @async
+ * @function toggleTableStatus
+ * @param {import('express').Request} req - Express request with table ID in params and target status in body.
+ * @param {import('express').Response} res - Express response object.
+ * @returns {Promise<void>}
+ */
 exports.toggleTableStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body; // e.g. 'closed' or 'available'
+    const { status } = req.body; // Target status: 'closed' or 'available'
 
     const table = await Table.findById(id);
     if (!table) {
       return res.status(404).json({ message: 'Table not found' });
     }
 
-    // Prevent closing an active table
+    // Safety guard: Prevent closing a table that is currently active with active diners
     if (status === 'closed' && table.status === 'active') {
       return res.status(400).json({ message: 'Cannot close a table that is currently active with customers.' });
     }
@@ -81,7 +120,16 @@ exports.toggleTableStatus = async (req, res) => {
   }
 };
 
-// Validate QR Code and issue customer session token
+/**
+ * Validates table number and scanned QR token.
+ * On successful validation, generates a signed 12-hour customer session JWT.
+ * 
+ * @async
+ * @function validateQR
+ * @param {import('express').Request} req - Express request containing `tableNumber` and `qrToken` in body.
+ * @param {import('express').Response} res - Express response containing customer JWT token and table details.
+ * @returns {Promise<void>}
+ */
 exports.validateQR = async (req, res) => {
   try {
     const { tableNumber, qrToken } = req.body;
@@ -96,19 +144,21 @@ exports.validateQR = async (req, res) => {
       return res.status(404).json({ message: 'Table not found' });
     }
 
+    // Verify token matches the assigned table QR token
     if (table.qrToken !== qrToken) {
       return res.status(403).json({ message: 'Invalid QR Code token' });
     }
 
+    // Prevent ordering if table is marked closed by admin
     if (table.status === 'closed') {
       return res.status(403).json({ message: 'This table is currently closed.' });
     }
 
-    // Issue Customer JWT
+    // Issue Customer JWT token valid for 12 hours
     const token = jwt.sign(
       { tableNumber: table.number, role: 'customer', sessionId: crypto.randomBytes(4).toString('hex') },
       JWT_SECRET,
-      { expiresIn: '12h' } // 12 hour session
+      { expiresIn: '12h' }
     );
 
     res.json({ message: 'QR Code validated successfully', token, table: table });
@@ -117,3 +167,4 @@ exports.validateQR = async (req, res) => {
     res.status(500).json({ message: 'Server error while validating QR' });
   }
 };
+
