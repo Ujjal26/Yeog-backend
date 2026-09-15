@@ -79,6 +79,9 @@ exports.addTable = async (req, res) => {
 
     await newTable.save();
     res.status(201).json({ message: 'Table added successfully', table: newTable });
+
+    const io = req.app.get('io');
+    if (io) io.emit('table_updated');
   } catch (error) {
     console.error('Error adding table:', error);
     res.status(500).json({ message: 'Server error while adding table' });
@@ -114,6 +117,9 @@ exports.toggleTableStatus = async (req, res) => {
     await table.save();
 
     res.json({ message: 'Table status updated successfully', table });
+
+    const io = req.app.get('io');
+    if (io) io.emit('table_updated');
   } catch (error) {
     console.error('Error toggling table status:', error);
     res.status(500).json({ message: 'Server error while updating table status' });

@@ -59,6 +59,9 @@ const io = new Server(server, {
 const setupWebSocket = require("./webSocket/socket");
 setupWebSocket(io);
 
+// Expose io to all routes so they can emit events on REST actions
+app.set('io', io);
+
 // Start HTTP Server
 server.listen(process.env.PORT, () => {
   console.log("Server is running on port", process.env.PORT);

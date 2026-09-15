@@ -81,6 +81,9 @@ exports.addItem = async (req, res) => {
     };
     
     res.status(201).json({ message: 'Item added successfully', item: transformedItem });
+
+    const io = req.app.get('io');
+    if (io) io.emit('menu_updated');
   } catch (error) {
     console.error('Error adding menu item:', error);
     res.status(500).json({ message: 'Server error while adding menu item' });
@@ -120,6 +123,9 @@ exports.updateItem = async (req, res) => {
     };
 
     res.json({ message: 'Item updated successfully', item: transformedItem });
+
+    const io = req.app.get('io');
+    if (io) io.emit('menu_updated');
   } catch (error) {
     console.error('Error updating menu item:', error);
     res.status(500).json({ message: 'Server error while updating menu item' });
@@ -145,6 +151,9 @@ exports.deleteItem = async (req, res) => {
     }
 
     res.json({ message: 'Item deleted successfully' });
+
+    const io = req.app.get('io');
+    if (io) io.emit('menu_updated');
   } catch (error) {
     console.error('Error deleting menu item:', error);
     res.status(500).json({ message: 'Server error while deleting menu item' });
@@ -178,6 +187,9 @@ exports.toggleAvailability = async (req, res) => {
     };
 
     res.json({ message: 'Item availability toggled successfully', item: transformedItem });
+
+    const io = req.app.get('io');
+    if (io) io.emit('menu_updated');
   } catch (error) {
     console.error('Error toggling menu item availability:', error);
     res.status(500).json({ message: 'Server error while toggling availability' });
