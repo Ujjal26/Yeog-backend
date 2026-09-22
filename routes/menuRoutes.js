@@ -16,6 +16,13 @@ const authMiddleware = require('../middlewares/authMiddleware');
 router.get('/', menuController.getAllItems);
 
 /**
+ * @route   GET /api/menu/stock-summary
+ * @desc    Get stock summary: total items, in-stock count, and total stock value
+ * @access  Public
+ */
+router.get('/stock-summary', menuController.getStockSummary);
+
+/**
  * @route   POST /api/menu
  * @desc    Create a new menu item
  * @access  Private (Admin only)

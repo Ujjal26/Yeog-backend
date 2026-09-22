@@ -196,3 +196,59 @@ exports.toggleAvailability = async (req, res) => {
   }
 };
 
+/**
+ * Returns a stock summary of all menu items.
+ * Provides total item count (all), total available items in stock,
+ * total out-of-stock items, and the cumulative stock value
+ * (sum of price × 1 for each available item, since menu items don't
+ * carry a stock-quantity field — each unique item is treated as one unit).
+ *
+ * @async
+ * @function getStockSummary
+ * @param {import('express').Request} req - Express request object.
+ * @param {import('express').Response} res - Express response with stock summary object.
+ * @returns {Promise<void>}
+ */
+exports.getStockSummary = async (req, res) => {
+  try {
+    const items = await OrderMenu.find();
+
+    const totalItems = items.length;
+    const availableItems = items.filter(item => item.isAvailable);
+    const unavailableItems = items.filter(item => !item.isAvailable);
+
+    // Total catalog value: sum of price for every menu item (regardless of availability)
+    const totalCatalogValue = items.reduce((acc, item) => acc + (item.price || 0), 0);
+    // In-stock value: sum of price for available items only
+    const inStockValue = availableItems.reduce((acc, item) => acc + (item.price || 0), 0);
+
+    // Category-level breakdown
+    const categoryMap = {};
+    items.forEach(item => {
+      const cat = item.category || 'Uncategorized';
+      if (!categoryMap[cat]) {
+        categoryMap[cat] = { category: cat, total: 0, available: 0, value: 0 };
+      }
+      categoryMap[cat].total += 1;
+      if (item.isAvailable) {
+        categoryMap[cat].available += 1;
+        categoryMap[cat].value += item.price || 0;
+      }
+    });
+
+    const categoryBreakdown = Object.values(categoryMap).sort((a, b) => b.total - a.total);
+
+    res.json({
+      totalItems,
+      inStockCount: availableItems.length,
+      outOfStockCount: unavailableItems.length,
+      totalCatalogValue,
+      inStockValue,
+      categoryBreakdown,
+    });
+  } catch (error) {
+    console.error('Error fetching stock summary:', error);
+    res.status(500).json({ message: 'Server error while fetching stock summary' });
+  }
+};
+
