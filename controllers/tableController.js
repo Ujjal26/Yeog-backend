@@ -71,8 +71,11 @@ exports.addTable = async (req, res) => {
     const lastTable = await Table.findOne().sort({ number: -1 });
     const nextNumber = lastTable ? lastTable.number + 1 : 1;
 
+    const { name } = req.body;
+
     const newTable = new Table({
       number: nextNumber,
+      name: name ? name.trim() : '',
       status: 'available',
       qrToken: crypto.randomBytes(8).toString('hex'),
     });

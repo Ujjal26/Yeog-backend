@@ -10,6 +10,7 @@ const mongoose = require('mongoose');
  * Table Schema
  * @typedef {Object} Table
  * @property {number} number - Unique numeric identifier of the physical table.
+ * @property {string} [name] - Optional human-readable label for the table (e.g. "Counter 1", "Pool Table").
  * @property {'available'|'active'|'closed'} status - Current status of the table.
  * @property {string} qrToken - Cryptographic random hex token encoded into the table's QR code for authentication.
  * @property {Date} createdAt - Mongoose timestamp for table record creation.
@@ -21,6 +22,11 @@ const tableSchema = new mongoose.Schema(
       type: Number,
       required: true,
       unique: true,
+    },
+    name: {
+      type: String,
+      trim: true,
+      default: '',
     },
     status: {
       type: String,
