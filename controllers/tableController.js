@@ -158,19 +158,53 @@ exports.validateQR = async (req, res) => {
       return res.status(403).json({ message: 'Invalid QR Code token' });
     }
 
+    const isMenuTable = table.name?.trim().toLowerCase() === 'menu table';
+
+    // Security: Block new QR scans if this table already has an active customer session.
+    // This prevents a second person from taking over a table mid-session or accidentally
+    // generating a new loginToken that invalidates the current customer's JWT.
+    // The table becomes scannable again only after the admin clicks Payment Done (which
+    // resets the status to 'available') or after the customer disconnects with no orders.
+    if (table.status === 'active' && !isMenuTable) {
+      return res.status(403).json({
+        message: 'This table is currently occupied. Please wait for the current session to end or ask a staff member for assistance.',
+      });
+    }
+
     // Prevent ordering if table is marked closed by admin
     if (table.status === 'closed') {
       return res.status(403).json({ message: 'This table is currently closed.' });
     }
 
-    // Issue Customer JWT token valid for 12 hours
+    // For regular tables, generate a fresh loginToken on every QR scan.
+    // This rotates the session key, instantly invalidating any previous customer session.
+    // For the Menu Table, reuse the existing loginToken so multiple people can view it
+    // concurrently without kicking each other out.
+    let loginToken = table.loginToken;
+    let updatedTable = table;
+
+    if (!isMenuTable || !loginToken) {
+      loginToken = crypto.randomBytes(16).toString('hex');
+
+      // Use $set with findOneAndUpdate instead of table.save() to atomically update ONLY
+      // the loginToken field. This prevents accidentally overwriting other fields like
+      // `status` which the socket handler may have concurrently set to 'active'.
+      updatedTable = await Table.findOneAndUpdate(
+        { number: Number(table.number) },
+        { $set: { loginToken } },
+        { new: true }
+      );
+    }
+
+    // Issue Customer JWT embedding the loginToken — valid for 12 hours.
+    // The socket middleware will validate this against the DB on every connection.
     const token = jwt.sign(
-      { tableNumber: table.number, role: 'customer', sessionId: crypto.randomBytes(4).toString('hex') },
+      { tableNumber: table.number, role: 'customer', loginToken },
       JWT_SECRET,
       { expiresIn: '12h' }
     );
 
-    res.json({ message: 'QR Code validated successfully', token, table: table });
+    res.json({ message: 'QR Code validated successfully', token, table: updatedTable });
   } catch (error) {
     console.error('Error validating QR token:', error);
     res.status(500).json({ message: 'Server error while validating QR' });

@@ -9,6 +9,7 @@ const Table = require('../models/Table');
 const Order = require('../models/Order');
 const OrderData = require('../models/OrderData');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 // Validate JWT Secret for Socket authentication
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -27,8 +28,13 @@ module.exports = function (io) {
    * Socket Authentication Middleware.
    * Extracts JWT token from `socket.handshake.auth.token`, verifies signature,
    * and attaches role properties (`socket.isAdmin = true` or `socket.customerTable = tableNumber`).
+   *
+   * For customer tokens, performs an additional DB check:
+   * the `loginToken` embedded in the JWT must match the current `loginToken` stored
+   * in the Table document. A mismatch means the table was reset after this JWT was issued,
+   * so the connection is rejected with a 'Session expired' error.
    */
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) {
       return next(new Error('Authentication error: No token provided'));
@@ -38,10 +44,25 @@ module.exports = function (io) {
       const decoded = jwt.verify(token, JWT_SECRET);
 
       if (decoded.role === 'admin' || decoded.username === 'admin') {
-        // Verified admin token
+        // Verified admin token — no DB check needed
         socket.isAdmin = true;
       } else {
-        // Verified customer token — attach the table number from the token payload
+        // Customer token: verify the rotating loginToken against the DB.
+        // This is the key gate that invalidates stale sessions after a table reset.
+        const table = await Table.findOne({ number: decoded.tableNumber });
+
+        // Backward compatibility: if BOTH the JWT and the DB have no loginToken
+        // (e.g. customer scanned before the loginToken feature was deployed, or the
+        // table DB record hasn't been scanned yet), allow the connection so existing
+        // sessions survive a server restart without forcing a re-scan.
+        // Only reject when the DB has a real loginToken AND the JWT doesn't match it.
+        const jwtToken = decoded.loginToken ?? null;
+        const dbToken  = table?.loginToken ?? null;
+        const isMismatch = dbToken !== null && jwtToken !== dbToken;
+
+        if (!table || isMismatch) {
+          return next(new Error('Session expired: table has been reset. Please re-scan the QR code.'));
+        }
         socket.customerTable = decoded.tableNumber;
       }
 
@@ -237,16 +258,28 @@ module.exports = function (io) {
       io.in(`table_${tableNumber}`).disconnectSockets(true);
 
       try {
-        // Reset table status to 'available'
-        await Table.findOneAndUpdate({ number: Number(tableNumber) }, { status: 'available' }, { new: true });
-        console.log(`DB Updated: Table ${tableNumber} is available`);
+        // Reset table status to 'available' AND rotate the loginToken.
+        // Rotating the loginToken immediately invalidates the old customer's JWT —
+        // any reconnect attempt from them will fail the socket middleware's DB check.
+        const newLoginToken = crypto.randomBytes(16).toString('hex');
+        await Table.findOneAndUpdate(
+          { number: Number(tableNumber) },
+          { status: 'available', loginToken: newLoginToken },
+          { new: true }
+        );
+        console.log(`DB Updated: Table ${tableNumber} is available (loginToken rotated)`);
         
         // Remove completed orders for this table
         await Order.deleteMany({ tableNumber: Number(tableNumber) });
         console.log(`DB Cleared: Orders for Table ${tableNumber} deleted`);
 
-        // Emit updated list of active tables to admin room
-        io.to('admin_room').emit('active_tables', getActiveTables());
+        // Use setImmediate so the socket adapter fully processes disconnectSockets
+        // before we read active rooms — this prevents the "needs 2 clicks" race condition
+        setImmediate(() => {
+          io.to('admin_room').emit('active_tables', getActiveTables());
+          // Also emit table_updated so the frontend fetches fresh DB data
+          io.to('admin_room').emit('table_updated');
+        });
       } catch (err) {
         console.error('Error on payment completion (Table or Orders update):', err);
       }
@@ -255,9 +288,55 @@ module.exports = function (io) {
     /**
      * Event: `disconnect`
      * Handles socket disconnect events.
+     * If a customer disconnects (e.g., closes the browser tab) without going through
+     * the payment flow, we detect if their table room is now empty and revert the
+     * table status back to 'available' in both the DB and the admin UI.
      */
     socket.on('disconnect', (reason) => {
       console.log(`Socket disconnected: ${socket.id} (${reason})`);
+
+      // Only process cleanup for customer sockets
+      if (!socket.customerTable) return;
+
+      const tableNo = socket.customerTable;
+      const roomName = `table_${tableNo}`;
+
+      // Use setImmediate so the adapter removes this socket from rooms first
+      setImmediate(async () => {
+        const room = io.sockets.adapter.rooms.get(roomName);
+        const isEmpty = !room || room.size === 0;
+
+        if (isEmpty) {
+          try {
+            // Check whether there are any pending orders for this table.
+            // If orders exist, the customer disconnected mid-session (killed browser, etc.)
+            // but the kitchen still needs to serve them — keep the table active so the
+            // admin can see the outstanding orders and complete payment normally.
+            const pendingOrderCount = await Order.countDocuments({ tableNumber: Number(tableNo) });
+
+            if (pendingOrderCount > 0) {
+              // Orders still pending — do NOT suspend the table.
+              // The admin must click Payment Done to reset it.
+              console.log(`Table ${tableNo} room empty but has ${pendingOrderCount} pending order(s) — keeping active until payment.`);
+              // Do NOT emit table_closed or change DB status here.
+            } else {
+              // No pending orders and no connected sockets — safe to release the table.
+              await Table.findOneAndUpdate(
+                { number: Number(tableNo) },
+                { status: 'available' },
+                { new: true }
+              );
+              console.log(`DB Updated: Table ${tableNo} reverted to available (no pending orders, room empty).`);
+
+              // Notify admin dashboard
+              io.to('admin_room').emit('table_closed', tableNo);
+              io.to('admin_room').emit('active_tables', getActiveTables());
+            }
+          } catch (err) {
+            console.error(`Failed to process Table ${tableNo} cleanup on disconnect:`, err);
+          }
+        }
+      });
     });
   });
 };
