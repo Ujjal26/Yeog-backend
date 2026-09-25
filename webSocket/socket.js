@@ -236,6 +236,34 @@ module.exports = function (io) {
     });
 
     /**
+     * Event: `edit_order_item`
+     * Admin edited an order item (reduced quantity or cancelled).
+     * The actual DB mutation is done via the REST API; this event is for real-time sync.
+     * Notifies the customer table and other admin tabs.
+     */
+    socket.on('edit_order_item', (data) => {
+      if (!socket.isAdmin) {
+        console.warn(`Blocked edit_order_item from non-admin Socket: ${socket.id}`);
+        return;
+      }
+      const { orderId, tableNumber, updatedOrder, deleted } = data;
+      console.log(`Order ${orderId} item edited by admin (deleted=${deleted})`);
+
+      // Notify customer table so their order view updates
+      io.to(`table_${tableNumber}`).emit('order_item_edited', {
+        orderId,
+        updatedOrder,
+        deleted,
+      });
+      // Synchronize across all admin screens
+      socket.to('admin_room').emit('order_item_edited', {
+        orderId,
+        updatedOrder,
+        deleted,
+      });
+    });
+
+    /**
      * Event: `payment_done`
      * Admin completes payment settlement for a table.
      * Notifies customer table, disconnects customer sockets, marks table 'available' in DB,

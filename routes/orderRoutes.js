@@ -22,5 +22,12 @@ router.get("/", authMiddleware, orderController.getAllOrders);
  */
 router.get("/orderdata", authMiddleware, orderController.getOrderData);
 
+/**
+ * @route   PUT /api/orders/:orderId/edit-item
+ * @desc    Reduce quantity or cancel an item within an order (also updates OrderData analytics)
+ * @access  Private (Admin only)
+ */
+router.put("/:orderId/edit-item", authMiddleware, orderController.editOrderItem);
+
 module.exports = router;
 
