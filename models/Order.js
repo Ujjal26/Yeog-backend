@@ -27,7 +27,7 @@ const mongoose = require('mongoose');
 const OrderSchema = new mongoose.Schema(
   {
     id: { type: String, required: true, unique: true }, // Unique frontend-generated order ID
-    tableNumber: { type: Number, required: true },
+    tableNumber: { type: Number, required: true, index: true },
     items: [
       {
         id: String,
@@ -35,6 +35,7 @@ const OrderSchema = new mongoose.Schema(
         description: String,
         price: Number,
         qty: Number,
+        isDone: { type: Boolean, default: false },
       },
     ],
     total: { type: Number, required: true },
@@ -42,6 +43,7 @@ const OrderSchema = new mongoose.Schema(
       type: String,
       enum: ['Received', 'Served'],
       default: 'Received',
+      index: true,
     },
     timestamp: { type: String }, // Pre-formatted client-side timestamp string
   },

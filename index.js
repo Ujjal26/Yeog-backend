@@ -44,10 +44,16 @@ app.use("/api/menu", menuRoutes);
 const orderRoutes = require("./routes/orderRoutes");
 app.use("/api/orders", orderRoutes);
 
+// Check-In Management Routes (/api/checkins)
+const checkInRoutes = require("./routes/checkInRoutes");
+app.use("/api/checkins", checkInRoutes);
+
 // HTTP & Socket.IO Server Setup
 const server = http.createServer(app);
 
 const io = new Server(server, {
+  pingInterval: 15000, // Ping every 15 seconds
+  pingTimeout: 30000,  // Disconnect if no pong after 30 seconds
   cors: {
     origin: [process.env.CLIENT_URL, "http://localhost:5173"].filter(Boolean),
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -65,6 +71,16 @@ app.set('io', io);
 // Start HTTP Server
 server.listen(process.env.PORT, () => {
   console.log("Server is running on port", process.env.PORT);
+});
+
+// Scheduled Jobs (Cron)
+const cron = require('node-cron');
+const { autoCheckOutStale } = require('./controllers/checkInController');
+
+// Run End-Of-Day cleanup every day at 10:45 PM
+cron.schedule('45 22 * * *', () => {
+  console.log('[CRON] Running End of Day Check-In Cleanup at 10:45 PM');
+  autoCheckOutStale(null, null); // Pass nulls since there's no req/res
 });
 
 // Database Connection & Initial Seeding

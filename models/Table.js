@@ -36,6 +36,7 @@ const tableSchema = new mongoose.Schema(
       type: String,
       enum: ['available', 'active', 'closed'],
       default: 'available',
+      index: true,
     },
     qrToken: {
       type: String,
@@ -45,6 +46,7 @@ const tableSchema = new mongoose.Schema(
     loginToken: {
       type: String,
       default: null, // null until the first QR scan — existing DB documents stay valid
+      index: true,
     },
   },
   { timestamps: true }

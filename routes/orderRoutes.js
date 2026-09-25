@@ -29,5 +29,12 @@ router.get("/orderdata", authMiddleware, orderController.getOrderData);
  */
 router.put("/:orderId/edit-item", authMiddleware, orderController.editOrderItem);
 
+/**
+ * @route   PUT /api/orders/:orderId/items/:itemId/done
+ * @desc    Mark a specific item in an order as done
+ * @access  Private (Admin only)
+ */
+router.put("/:orderId/items/:itemId/done", authMiddleware, orderController.markItemDone);
+
 module.exports = router;
 

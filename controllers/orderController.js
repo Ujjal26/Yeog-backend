@@ -90,6 +90,10 @@ exports.editOrderItem = async (req, res) => {
     }
 
     const targetItem = order.items[itemIndex];
+    if (targetItem.isDone) {
+      return res.status(400).json({ message: 'Cannot edit an item that is already prepared in the kitchen.' });
+    }
+
     const oldQty = targetItem.qty;
     const qtyDiff = oldQty - parsedQty; // How many units were removed
 
@@ -134,6 +138,36 @@ exports.editOrderItem = async (req, res) => {
   } catch (err) {
     console.error('Error editing order item:', err);
     res.status(500).json({ message: 'Server error while editing order item' });
+  }
+};
+
+/**
+ * Marks an item as done (prepared).
+ */
+exports.markItemDone = async (req, res) => {
+  try {
+    const { orderId, itemId } = req.params;
+    const order = await Order.findOne({ id: orderId });
+    
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const itemIndex = order.items.findIndex((item) => 
+      item._id?.toString() === itemId || item.id === itemId || item.name === itemId
+    );
+
+    if (itemIndex === -1) {
+      return res.status(404).json({ message: 'Item not found in order' });
+    }
+
+    order.items[itemIndex].isDone = true;
+    await order.save();
+
+    res.json({ message: 'Item marked as prepared', order });
+  } catch (err) {
+    console.error('Error marking item done:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
