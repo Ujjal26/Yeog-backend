@@ -15,6 +15,10 @@ const mongoose = require("mongoose");
  */
 const orderDataSchema = new mongoose.Schema(
   {
+    id:{
+      type: String,
+      required: true,
+    },
     order: {
       type: String,
       required: true,
