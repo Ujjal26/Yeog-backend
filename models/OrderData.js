@@ -15,10 +15,6 @@ const mongoose = require("mongoose");
  */
 const orderDataSchema = new mongoose.Schema(
   {
-    orderId: {
-      type: String,
-      required: true,
-    },
     order: {
       type: String,
       required: true,
