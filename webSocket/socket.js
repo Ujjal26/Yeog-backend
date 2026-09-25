@@ -349,12 +349,16 @@ module.exports = function (io) {
               // Do NOT emit table_closed or change DB status here.
             } else {
               // No pending orders and no connected sockets — safe to release the table.
+              // We also rotate the loginToken here so that if the user killed their browser
+              // without ordering, their persistent localStorage token is instantly invalidated.
+              // They (or the next customer) will be forced to rescan the QR code.
+              const newLoginToken = crypto.randomBytes(16).toString('hex');
               await Table.findOneAndUpdate(
                 { number: Number(tableNo) },
-                { status: 'available' },
+                { status: 'available', loginToken: newLoginToken },
                 { new: true }
               );
-              console.log(`DB Updated: Table ${tableNo} reverted to available (no pending orders, room empty).`);
+              console.log(`DB Updated: Table ${tableNo} reverted to available and token rotated (no pending orders).`);
 
               // Notify admin dashboard
               io.to('admin_room').emit('table_closed', tableNo);
