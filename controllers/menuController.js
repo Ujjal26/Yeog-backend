@@ -59,7 +59,7 @@ exports.getAllItems = async (req, res) => {
  */
 exports.addItem = async (req, res) => {
   try {
-    const { name, price, description, category, image } = req.body;
+    const { name, price, description, category, image, isVeg } = req.body;
     
     if (!name || !price || !description || !category || !image) {
       return res.status(400).json({ message: 'All fields are required' });
@@ -71,6 +71,7 @@ exports.addItem = async (req, res) => {
       description,
       category: formatCategory(category),
       image,
+      isVeg: isVeg !== undefined ? Boolean(isVeg) : false,
     });
 
     await newItem.save();
@@ -102,7 +103,7 @@ exports.addItem = async (req, res) => {
 exports.updateItem = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, price, description, category, image } = req.body;
+    const { name, price, description, category, image, isVeg } = req.body;
 
     const item = await OrderMenu.findById(id);
     if (!item) {
@@ -114,6 +115,7 @@ exports.updateItem = async (req, res) => {
     if (description) item.description = description;
     if (category) item.category = formatCategory(category);
     if (image) item.image = image;
+    if (isVeg !== undefined) item.isVeg = Boolean(isVeg);
 
     await item.save();
     

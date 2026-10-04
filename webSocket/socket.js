@@ -188,6 +188,7 @@ module.exports = function (io) {
         // Also persist each line item to OrderData for sales analytics
         if (Array.isArray(order.items) && order.items.length > 0) {
           const orderDataDocs = order.items.map((item) => ({
+            orderId: order.id,
             order: item.name || item.id,
             quantity: Number(item.qty) || 1,
             amount: Number(item.price) || 0, // Unit price only as specified

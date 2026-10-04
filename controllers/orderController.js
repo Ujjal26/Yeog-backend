@@ -104,7 +104,7 @@ exports.editOrderItem = async (req, res) => {
     // Update OrderData analytics: subtract the removed quantity and amount
     if (qtyDiff > 0) {
       const itemName = targetItem.name || targetItem.id;
-      const orderDataDoc = await OrderData.findOne({ order: itemName });
+      const orderDataDoc = await OrderData.findOne({ orderId: orderId, order: itemName });
       if (orderDataDoc) {
         orderDataDoc.quantity = Math.max(0, orderDataDoc.quantity - qtyDiff);
         orderDataDoc.amount = Math.max(0, orderDataDoc.amount - (targetItem.price * qtyDiff));
