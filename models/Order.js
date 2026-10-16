@@ -36,6 +36,17 @@ const OrderSchema = new mongoose.Schema(
         price: Number,
         qty: Number,
         isDone: { type: Boolean, default: false },
+        isCombo: { type: Boolean, default: false },
+        comboItems: [
+          {
+            id: String,
+            name: String,
+            qty: Number,
+            isVeg: Boolean,
+            description: String,
+            price: Number,
+          },
+        ],
       },
     ],
     total: { type: Number, required: true },

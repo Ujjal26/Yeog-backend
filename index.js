@@ -40,6 +40,10 @@ app.use("/api/tables", tableRoutes);
 const menuRoutes = require("./routes/menuRoutes");
 app.use("/api/menu", menuRoutes);
 
+// Combo / Deal Bundle Routes (/api/combos)
+const comboRoutes = require("./routes/comboRoutes");
+app.use("/api/combos", comboRoutes);
+
 // Order Management Routes (/api/orders)
 const orderRoutes = require("./routes/orderRoutes");
 app.use("/api/orders", orderRoutes);

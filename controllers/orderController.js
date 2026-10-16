@@ -153,8 +153,14 @@ exports.markItemDone = async (req, res) => {
       return res.status(404).json({ message: 'Order not found' });
     }
 
+    const decodedItemId = decodeURIComponent(itemId);
     const itemIndex = order.items.findIndex((item) => 
-      item._id?.toString() === itemId || item.id === itemId || item.name === itemId
+      item._id?.toString() === itemId ||
+      item._id?.toString() === decodedItemId ||
+      item.id === itemId ||
+      item.id === decodedItemId ||
+      item.name?.toLowerCase() === itemId.toLowerCase() ||
+      item.name?.toLowerCase() === decodedItemId.toLowerCase()
     );
 
     if (itemIndex === -1) {
